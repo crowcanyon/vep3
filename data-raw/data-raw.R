@@ -194,11 +194,18 @@ vep3_wbd %<>%
   dplyr::filter(!is.na(`Study_Area`)) %>%
   sf::st_cast("MULTIPOLYGON") %>%
   dplyr::arrange(Hydrologic_Unit, Study_Area, Hydrologic_Unit) %>%
-  sf::st_transform(vep3_projection)
+  sf::st_transform(vep3_projection) %>%
+  dplyr::rename(geom = geometry)
 
 usethis::use_data(vep3_wbd,
                   overwrite = TRUE)
 
+vep3_boundary <-
+  vep3_wbd %>%
+  sf::st_union()
+
+usethis::use_data(vep3_boundary,
+                  overwrite = TRUE)
 
 # Surface Land Management
 httr::GET(
@@ -261,7 +268,31 @@ vep3_surface_management <-
   dplyr::summarise() %>%
   dplyr::ungroup() %>%
   sf::st_cast("MULTIPOLYGON") %>%
-  sf::st_transform(vep3_projection)
+  sf::st_transform(vep3_projection) %>%
+  dplyr::mutate(Agency =
+                  factor(Agency,
+                         levels = c("BLM",
+                                    "USFS",
+                                    "NPS",
+                                    "Tribal Land",
+                                    "Local/State"),
+                         labels = c("Bureau of Land Management",
+                                    "US Forest Service",
+                                    "National Parks Service",
+                                    "Tribal Land",
+                                    "State/Local"),
+                         ordered = TRUE),
+                Department =
+                  factor(Department,
+                         levels = c("DOI",
+                                    "USDA",
+                                    "Tribal Land"),
+                         labels = c("Department of Interior",
+                                    "Department of Agriculture",
+                                    "Tribal Land"),
+                         ordered = TRUE)) %>%
+  dplyr::rename(geom = SHAPE) %>%
+  dplyr::select(-Name)
 
 usethis::use_data(vep3_surface_management,
                   overwrite = TRUE)
@@ -320,7 +351,8 @@ vep3_bears_ears <-
       dplyr::mutate(Name = "Bears Ears National Monument — Original Designation")
   ) %>%
   dplyr::arrange(.,-sf::st_area(.)) %>%
-  sf::st_transform(vep3_projection)
+  sf::st_transform(vep3_projection) %>%
+  dplyr::rename(geom = SHAPE)
 
 usethis::use_data(vep3_bears_ears,
                   overwrite = TRUE)
@@ -340,7 +372,18 @@ vep3_native_nations <-
   sf::st_cast("MULTIPOLYGON") %>%
   dplyr::group_by(Nation) %>%
   dplyr::summarise() %>%
-  sf::st_transform(vep3_projection)
+  sf::st_transform(vep3_projection) %>%
+  dplyr::mutate(Nation = factor(Nation,
+                                levels = c("Navajo Nation",
+                                           "Southern Ute",
+                                           "Ute Mountain"),
+                                labels = c("Navajo Nation",
+                                           "Southern Ute Indian Tribe",
+                                           "Ute Mountain Ute Tribe"),
+                                ordered = TRUE),
+                Map = "Native Nations") %>%
+  dplyr::rename(Name = Nation) %>%
+  dplyr::rename(geom = geometry)
 
 usethis::use_data(vep3_native_nations,
                   overwrite = TRUE)
@@ -422,7 +465,7 @@ aggregate_longlat <-
   }
 
 vep3_hillshade <-
-  raster::raster(paste0(tempdir(), "/vep3_ned.tif ")) %>%
+  raster::raster(paste0(tempdir(), "/vep3_hillshade.tif ")) %>%
   aggregate_longlat(res = 100) %>%
   raster::projectRaster(crs = vep3_projection$input) %>%
   raster::crop(vep3_buffer %>%
